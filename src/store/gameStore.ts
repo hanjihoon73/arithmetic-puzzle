@@ -237,6 +237,10 @@ export const useGameStore = create<GameState>((set, get) => ({
     restartLevel: () => {
         const { level } = get();
         if (level) {
+            // Check if it was a generated level (id >= 1000 for example, or add a flag?)
+            // For now, if it's a fixed level from assets, reload it.
+            // If it's generated, we might want to regenerate OR restart the specific instance.
+            // Let's assume restart means "reset current board state".
             get().initializeLevel(level);
         }
     },
