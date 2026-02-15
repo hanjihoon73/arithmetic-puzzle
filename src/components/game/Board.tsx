@@ -11,7 +11,7 @@ export default function Board() {
 
     return (
         <div
-            className="grid gap-2 p-4 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800"
+            className="grid gap-2 p-4 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800 w-full max-w-md"
             style={{
                 gridTemplateColumns: `repeat(${level.boardSize.cols}, minmax(0, 1fr))`
             }}

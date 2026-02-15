@@ -11,7 +11,7 @@ interface CellProps {
 }
 
 export default function Cell({ cell, index }: CellProps) {
-    const { placeNumber, status } = useGameStore();
+    const { placeNumber, status, selectedCell, selectCell } = useGameStore();
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
@@ -48,10 +48,10 @@ export default function Cell({ cell, index }: CellProps) {
         e.preventDefault();
     };
 
-    const baseClasses = "w-12 h-12 sm:w-16 sm:h-16 flex items-center justify-center text-lg sm:text-2xl font-bold rounded-lg transition-colors border-2";
+    const baseClasses = "w-full aspect-square flex items-center justify-center text-lg sm:text-2xl font-bold rounded-lg transition-colors border-2";
 
     if (cell.type === 'empty') {
-        return <div className="w-12 h-12 sm:w-16 sm:h-16" />; // Invisible spacer
+        return <div className="w-full aspect-square" />; // Invisible spacer
     }
 
     if (cell.type === 'operator') {
@@ -75,6 +75,8 @@ export default function Cell({ cell, index }: CellProps) {
     const isCorrect = cell.isCorrect;
     const isWrong = cell.isWrong;
 
+    const isSelected = selectedCell?.r === cell.r && selectedCell?.c === cell.c;
+
     const handleDragStart = (e: React.DragEvent, val: number) => {
         const data = JSON.stringify({ value: val, source: { r: cell.r, c: cell.c } });
         e.dataTransfer.setData('application/json', data);
@@ -89,8 +91,14 @@ export default function Cell({ cell, index }: CellProps) {
                 isFilled ? "bg-white dark:bg-zinc-900" : "bg-zinc-100 dark:bg-zinc-800",
                 isCorrect && "bg-green-100 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-500 dark:text-green-400",
                 isWrong && "bg-red-100 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-500 dark:text-red-400",
-                !isFilled && !isCorrect && !isWrong && "border-zinc-300 dark:border-zinc-700 border-dashed"
+                !isFilled && !isCorrect && !isWrong && "border-zinc-300 dark:border-zinc-700 border-dashed",
+                isSelected && "ring-4 ring-blue-500 border-blue-500 z-10"
             )}
+            onClick={() => {
+                if (!isCorrect && !isWrong) {
+                    selectCell(cell.r, cell.c);
+                }
+            }}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             draggable={isFilled && status === 'playing'}

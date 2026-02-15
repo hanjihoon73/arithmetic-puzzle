@@ -58,8 +58,8 @@ export default function Home() {
         )}
 
         <Board />
-        <GameControls />
         <NumberPool />
+        <GameControls />
       </div>
     </main>
   );

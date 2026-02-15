@@ -1,44 +1,41 @@
-# 구현 계획 - 셈셈퍼즐 (Arithmetic Puzzle)
+# 구현 계획 - 실시간 수식 피드백
 
-이 문서는 사용자의 피드백을 반영하여 셈셈퍼즐의 문제점들을 수정하기 위한 계획을 설명합니다.
+사용자는 두 가지를 요청했습니다:
+1. 퍼즐 수식을 `숫자` `연산자` `숫자` `=` `답` 형태로 제한 (현재 레벨 데이터는 이를 준수함).
+2. 수식이 완성될 때마다 실시간으로 계산하여 피드백 제공.
 
-## 사용자 검토 필요
-> [!IMPORTANT]
-> - **레벨 데이터 구조 변경**: 기존의 희소(sparse) 배열 방식에서 모든 그리드 셀(빈 공간 포함)을 명시적으로 정의하는 방식으로 변경합니다. 이는 CSS Grid 레이아웃이 올바르게 작동하기 위해 필수적입니다.
-> - **레벨 1 재설계**: 레벨 62 대신 입문용 레벨 1을 새로 제작합니다. 가로/세로가 교차하는 간단한 크로스워드 형태를 갖습니다.
+## 목표
+- 수식 완성 시 시각적 피드백(초록색 깜빡임 등)을 제공하여 사용자가 성취감을 느끼게 함.
+- 올바른 수식이 완성되었을 때만 피드백을 제공.
 
-## 수정 사항
+## 사용자 검토 필요 사항
+없음.
 
-### 데이터 및 로직 (`src/lib`)
-#### [MODIFY] [src/lib/levelData.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/lib/levelData.ts)
-- `LEVEL_62`를 제거하고 `LEVEL_1`을 추가합니다.
-- **Level 1 구성 (5x5 그리드)**:
-    - 가로: `2 + 3 = 5`
-    - 세로(3에서 교차): `3 x 2 = 6`
-    - **Pool**: `[2, 3, 2]` (입력 칸의 정답과 정확히 일치)
-- `grid` 배열을 5x5=25개의 모든 셀에 대해 정의합니다. 빈 공간은 `type: 'empty'`로 채워 레이아웃 깨짐을 방지합니다.
-- 불필요한 연산자(`+` 등)를 제거하고 유효한 수식만 남깁니다.
-- `LEVELS` 객체의 키를 `1`로 업데이트하여 게임이 레벨 1부터 시작하도록 합니다.
+## 제안된 변경 사항
 
-### 상태 관리 (`src/store`)
-#### [MODIFY] [src/store/gameStore.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/store/gameStore.ts)
-- 초기 레벨 로드 로직을 확인하고, 레벨 1이 기본값으로 로드되는지 확인합니다. (데이터 변경만으로 자동 적용될 것으로 예상됨)
+### [Helper] 게임 로직
+#### [수정] [gameLogic.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/lib/gameLogic.ts)
+- `detectCompletedEquations(grid: Cell[])`: 그리드 내에서 완성된(모든 칸이 채워지고 올바른) 수식들의 셀 인덱스 목록을 반환하는 함수 추가.
+  - 가로(Row) 및 세로(Col) 탐색.
+  - `Number` `Operator` `Number` `=` `Number` 패턴 인식.
+  - 해당 수식이 수학적으로 참인지 검증 (또는 단순히 모든 셀이 `isCorrect`인지 확인).
+
+### [Store] 게임 상태 관리
+#### [수정] [gameStore.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/store/gameStore.ts)
+- 상태 추가: `solvedEquations: number[][]` (완성된 수식에 포함된 셀 인덱스들의 배열 목록).
+- `placeNumber` 액션 수정:
+  - 숫자를 배치한 후 `detectCompletedEquations`를 호출.
+  - 새로운 완성 수식이 발견되면 `solvedEquations` 상태 업데이트.
+  - (옵션) 일시적인 효과를 위해 `lastSolvedEquation` 상태를 두어 애니메이션 트리거 가능.
+
+### [Components] UI 피드백
+#### [수정] [Cell.tsx](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/components/game/Cell.tsx)
+- `solvedEquations`에 포함된 셀인지 확인.
+- 포함된 경우 특별한 스타일(예: 초록색 테두리 또는 배경 강조) 적용.
+- 막 완성된 수식에 대한 애니메이션 효과 추가.
 
 ## 검증 계획
-
-### 자동화 테스트
-- `npm run dev`로 개발 서버 실행.
-- 린트 체크: `npm run lint`.
-
-### 수동 검증
-1.  **초기 로딩**:
-    - 앱 접속 시 "Level 1"이 표시되는지 확인.
-    - 보드가 깨지지 않고 5x5 격자에 맞게 정렬되는지 확인.
-2.  **보드 레이아웃**:
-    - 가로 수식(`2 + 3 = 5`)과 세로 수식(`3 x 2 = 6`)이 교차하는지 시각적으로 확인.
-    - 불필요한 연산자가 없는지 확인.
-3.  **게임 플레이**:
-    - 하단 숫자 풀에 `2, 2, 3` 세 개의 숫자가 있는지 확인.
-    - 빈칸(Input Cell)이 정확히 3개인지 확인.
-    - 숫자를 드래그하여 정단 칸에 놓았을 때 고정되는지 확인.
-    - 모든 칸을 채웠을 때 승리(Win) 상태가 되는지 확인.
+1. 레벨 1에서 첫 번째 수식(`2 + 3 = 5`)의 빈칸을 채움.
+2. 마지막 숫자를 넣는 순간, 해당 수식을 구성하는 5개의 셀이 동시에 강조되는지 확인.
+3. 세로 수식도 동일하게 작동하는지 확인.
+4. 오답을 입력했을 때는 피드백이 발생하지 않는지 확인.

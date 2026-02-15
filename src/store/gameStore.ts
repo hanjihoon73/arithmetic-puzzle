@@ -9,7 +9,8 @@ interface GameState {
     lives: number;
     status: GameStatus;
     history: Cell[][]; // Simple history stack for undo (optional)
-
+    selectedCell: { r: number, c: number } | null;
+    selectedNumberIndex: number | null; // Use index to distinguish identical numbers in pool
     initializeLevel: (level: Level) => void;
     placeNumber: (row: number, col: number, value: number) => void;
     moveNumber: (fromR: number, fromC: number, toR: number, toC: number, value: number) => void;
@@ -18,6 +19,9 @@ interface GameState {
     useSmartFill: () => void;
     undo: () => void; // Optional
     restartLevel: () => void;
+    selectCell: (r: number, c: number) => void;
+    selectNumber: (index: number, value: number) => void;
+    clearSelection: () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -27,6 +31,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     lives: 3,
     status: 'playing',
     history: [],
+    selectedCell: null,
+    selectedNumberIndex: null,
 
     initializeLevel: (level) => {
         set({
@@ -36,6 +42,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             lives: level.initialLives || 3,
             status: 'playing',
             history: [],
+            selectedCell: null,
+            selectedNumberIndex: null,
         });
     },
 
@@ -69,10 +77,48 @@ export const useGameStore = create<GameState>((set, get) => ({
             });
         } else {
             // Wrong answer logic
+            // 1. Place it temporarily as 'wrong'
+            const newGrid = [...grid];
+            newGrid[cellIndex] = { ...cell, value: value, isWrong: true };
+
+            // 2. Remove from pool temporarily
+            const poolIndex = pool.indexOf(value);
+            const newPool = [...pool];
+            if (poolIndex > -1) newPool.splice(poolIndex, 1);
+
             set({
                 lives: Math.max(0, lives - 1),
                 status: lives - 1 <= 0 ? 'lost' : 'playing',
+                grid: newGrid,
+                pool: newPool,
+                selectedCell: null,
+                selectedNumberIndex: null
             });
+
+            // 3. Revert after delay (Bounce back effect)
+            setTimeout(() => {
+                const { grid: currentGrid, pool: currentPool, status: currentStatus } = get();
+
+                // If game ended, maybe don't revert or doesn't matter, but let's keep consistent
+                // Find the cell again
+                const currentCellIndex = currentGrid.findIndex((c) => c.r === row && c.c === col);
+                if (currentCellIndex === -1) return;
+
+                const currentCell = currentGrid[currentCellIndex];
+
+                // Only revert if it's currently holding the wrong value we placed
+                if (currentCell.value === value && currentCell.isWrong) {
+                    const revertedGrid = [...currentGrid];
+                    revertedGrid[currentCellIndex] = { ...cell, value: undefined, isWrong: undefined, isCorrect: undefined };
+
+                    const revertedPool = [...currentPool, value];
+
+                    set({
+                        grid: revertedGrid,
+                        pool: revertedPool
+                    });
+                }
+            }, 500);
         }
     },
 
@@ -92,7 +138,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
             set({
                 grid: newGrid,
-                pool: [...pool, value]
+                pool: [...pool, value],
+                selectedCell: null, // Clear selection
+                selectedNumberIndex: null
             });
         }
     },
@@ -153,6 +201,8 @@ export const useGameStore = create<GameState>((set, get) => ({
             set({
                 grid: newGrid,
                 status: won ? 'won' : 'playing',
+                selectedCell: null,
+                selectedNumberIndex: null
             });
         } else {
             // Moving to wrong spot: return to pool? or just stay?
@@ -185,5 +235,48 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (level) {
             get().initializeLevel(level);
         }
+    },
+
+    selectCell: (r, c) => {
+        const { status, selectedNumberIndex, pool, placeNumber } = get();
+        if (status !== 'playing') return;
+
+        // If a number is already selected, place it here
+        if (selectedNumberIndex !== null) {
+            const value = pool[selectedNumberIndex];
+            placeNumber(r, c, value);
+            // placeNumber clears selection
+        } else {
+            // Otherwise select/deselect this cell
+            const { selectedCell } = get();
+            if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                set({ selectedCell: null }); // Toggle off
+            } else {
+                set({ selectedCell: { r, c } });
+            }
+        }
+    },
+
+    selectNumber: (index, value) => {
+        const { status, selectedCell, placeNumber } = get();
+        if (status !== 'playing') return;
+
+        // If a cell is already selected, place this number there
+        if (selectedCell) {
+            placeNumber(selectedCell.r, selectedCell.c, value);
+            // placeNumber clears selection
+        } else {
+            // Otherwise select/deselect this number
+            const { selectedNumberIndex } = get();
+            if (selectedNumberIndex === index) {
+                set({ selectedNumberIndex: null }); // Toggle off
+            } else {
+                set({ selectedNumberIndex: index });
+            }
+        }
+    },
+
+    clearSelection: () => {
+        set({ selectedCell: null, selectedNumberIndex: null });
     }
 }));

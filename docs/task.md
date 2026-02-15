@@ -9,7 +9,10 @@
         - [x] 게임 메커니즘 정의 (0-100 범위, 드래그 앤 드롭, 즉시 피드백) <!-- id: 6 -->
   - [/] 구현 계획 수립 및 승인
   - [x] 문제점 분석 및 솔루션 도출
-  - [x] implementation_plan.md 작성
+  - [x] Implement Tap & Place interaction
+  - [x] Update Game Store
+  - [x] Update Cell Component
+  - [x] Update Number Pool Component_plan.md 작성
   - [x] 사용자 승인
 - [x] 데이터 및 로직 수정
   - [x] `src/lib/levelData.ts`: LEVEL_1 데이터 구현 (5x5 크로스워드, 풀 매칭)
