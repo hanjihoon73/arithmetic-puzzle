@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { LEVEL_1, LEVELS } from '@/lib/levelData';
+import { generateLevel } from '@/lib/generator';
 import Board from '@/components/game/Board';
 import NumberPool from '@/components/game/NumberPool';
 import GameControls from '@/components/game/GameControls';
@@ -24,11 +25,17 @@ export default function Home() {
     if (!level) return;
     const nextId = level.id + 1;
     const nextLevelData = LEVELS[nextId];
+
     if (nextLevelData) {
       initializeLevel(nextLevelData);
     } else {
-      alert("All levels completed! Restarting from Level 1.");
-      initializeLevel(LEVEL_1);
+      // Infinite Mode: Generate Level
+      let difficulty: 'easy' | 'medium' | 'hard' = 'easy';
+      if (nextId > 5) difficulty = 'medium';
+      if (nextId > 10) difficulty = 'hard';
+
+      const generatedLevel = generateLevel(nextId, difficulty);
+      initializeLevel(generatedLevel);
     }
   };
 

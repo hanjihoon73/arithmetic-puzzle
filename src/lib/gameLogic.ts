@@ -1,14 +1,46 @@
 import { Cell, Level } from '@/types';
 
-export const validatePlacement = (cell: Cell, value: number): boolean => {
-    return cell.type === 'input' && cell.answer === value;
+export const evaluateEquation = (formula: string): boolean => {
+    // "15 / 3 = 5" or "4 x 3 = 12"
+    if (!formula.includes('=')) return false;
+    const [lhs, rhs] = formula.split('=').map(s => s.trim());
+
+    // Replace visual operators with JS operators
+    const sanitizedLhs = lhs.replace(/x/g, '*').replace(/÷/g, '/');
+
+    try {
+        // eslint-disable-next-line
+        const result = new Function(`return ${sanitizedLhs}`)();
+        // Check for float precision issues
+        return Math.abs(result - parseFloat(rhs)) < 0.0001;
+    } catch {
+        return false;
+    }
+};
+
+export const validatePlacement = (cell: Cell, value: number, grid: Cell[]): boolean => {
+    // Legacy: Just checked answer.
+    // New: Need full equation context. But validation happens at Equation level, not cell level.
+    // So this function might be deprecated or just return true if type matches.
+    return cell.type === 'input';
 };
 
 export const checkWinCondition = (grid: Cell[]): boolean => {
-    return grid.every((cell) => {
+    // 1. All inputs must be filled and marked correct
+    const allFilled = grid.every((cell) => {
         if (cell.type !== 'input') return true;
-        return cell.value === cell.answer; // Assuming 'value' stores the current input for input cells
+        return cell.value !== undefined;
     });
+
+    if (!allFilled) return false;
+
+    // 2. All inputs must be correct (isCorrect=true from store logic)
+    const allCorrect = grid.every((cell) => {
+        if (cell.type !== 'input') return true;
+        return cell.isCorrect === true;
+    });
+
+    return allCorrect;
 };
 
 export const getHint = (grid: Cell[]): Cell | null => {

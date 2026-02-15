@@ -93,22 +93,53 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (filledEquationIndices.length > 0) {
             equationsValidated = true;
             filledEquationIndices.forEach((indices: number[]) => {
-                // Check if ALL input cells in this equation are correct
-                const allCorrect = indices.every((idx: number) => {
+                // Construct formula string
+                const formula = indices.map(idx => {
                     const c = newGrid[idx];
-                    if (c.type === 'input') {
-                        // Check if value matches answer
-                        // Note: c.value is what we just placed or existing.
-                        return c.value === c.answer;
-                    }
-                    return true; // Fixed/Operator cells are always "correct" structure-wise
-                });
+                    return c.value?.toString() || '';
+                }).join(' ');
 
-                // Apply status based on all-or-nothing
+                // Evaluate
+                // We need a helper for evaluation? It's in gameLogic now.
+                // But wait, evaluateEquation takes "15 / 3 = 5"
+                // The indices are in order? detectCompletedEquations returns ordered indices.
+                // Yes.
+
+                // Let's import evaluateEquation or execute logic here.
+                // Importing evaluateEquation from gameLogic creates circular dependency if gameLogic imports types?
+                // gameLogic deps: Cell, Level.
+                // store deps: gameLogic.
+                // It should be fine.
+
+                // However, evaluateEquation implementation above was:
+                // formula.split('=').
+                // Our formula string will be "12 / 3 = 4".
+
+                let isValid = false;
+                try {
+                    // Basic parser
+                    // Expected format: LHS = RHS
+                    const parts = formula.split('=');
+                    if (parts.length === 2) {
+                        const lhs = parts[0];
+                        const rhs = parts[1];
+                        // Replace visual operators
+                        const sanitizedLhs = lhs.replace(/x/g, '*').replace(/÷/g, '/');
+                        // eslint-disable-next-line
+                        const res = new Function(`return ${sanitizedLhs}`)();
+                        if (Math.abs(res - parseFloat(rhs)) < 0.0001) {
+                            isValid = true;
+                        }
+                    }
+                } catch (e) {
+                    isValid = false;
+                }
+
+                // Apply status
                 indices.forEach((idx: number) => {
                     const c = newGrid[idx];
                     if (c.type === 'input' && c.value !== undefined) {
-                        if (allCorrect) {
+                        if (isValid) {
                             newGrid[idx] = { ...c, isCorrect: true, isWrong: undefined };
                         } else {
                             // If equation is invalid, mark ALL inputs as wrong

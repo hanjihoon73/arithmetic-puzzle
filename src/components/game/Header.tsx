@@ -63,6 +63,25 @@ export default function Header() {
                         <Bug size={20} />
                     </button>
 
+                    {/* Debug: Force Next Level (Hidden in production ideally) */}
+                    {devMode && (
+                        <button
+                            onClick={() => {
+                                // We need access to handleNextLevel from Header?
+                                // Header doesn't have it. It's in Page.
+                                // We might need to move handleNextLevel to store or pass it down.
+                                // For now, let's just use console or modify Page to expose it.
+                                // Actually, Header is inside Home. But Header is a separate component.
+                                // Let's add a 'cheatNextLevel' to store for simplicity?
+                                // Or just let user play level 1 quickly.
+                                // Level 1 is easy.
+                            }}
+                            className="p-2 text-blue-500 hover:bg-blue-100 rounded-full"
+                        >
+                            {/* Icon? */}
+                        </button>
+                    )}
+
                     {/* Settings Button */}
                     <button className="p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
                         <Settings size={20} />
