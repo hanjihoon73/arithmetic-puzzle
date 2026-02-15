@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 export default function NumberPool() {
-    const { pool, status, selectedNumberIndex, selectNumber } = useGameStore();
+    const { pool, status, selectedNumberIndex, selectNumber, removeNumber } = useGameStore();
 
     const handleDragStart = (e: React.DragEvent, value: number) => {
         if (status !== 'playing') {
@@ -17,8 +17,30 @@ export default function NumberPool() {
         e.dataTransfer.effectAllowed = 'move';
     };
 
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // Allow dropping
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('application/json'));
+            if (data.source && typeof data.source === 'object' && 'r' in data.source && 'c' in data.source) {
+                // Dropped from grid -> Remove it
+                removeNumber(data.source.r, data.source.c);
+            }
+        } catch (err) {
+            console.error("Failed to parse drop data", err);
+        }
+    };
+
     return (
-        <div className="w-full max-w-md p-4 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800 mt-4">
+        <div
+            className="w-full max-w-md p-4 bg-white dark:bg-zinc-900 rounded-xl shadow-lg border border-zinc-200 dark:border-zinc-800 mt-4 transition-colors duration-200"
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+        >
             <h3 className="text-sm font-medium text-zinc-500 mb-2">Number Pool</h3>
             <div className="flex flex-wrap gap-2 justify-center min-h-[4rem]">
                 {pool.map((value, index) => {

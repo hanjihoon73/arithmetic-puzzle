@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Cell, GameStatus, Level } from '@/types';
-import { validatePlacement, checkWinCondition, getHint, getSmartFill } from '@/lib/gameLogic';
+import { validatePlacement, checkWinCondition, getHint, getSmartFill, detectCompletedEquations, getFilledEquations } from '@/lib/gameLogic';
 
 interface GameState {
     level: Level | null;
@@ -11,6 +11,7 @@ interface GameState {
     history: Cell[][]; // Simple history stack for undo (optional)
     selectedCell: { r: number, c: number } | null;
     selectedNumberIndex: number | null; // Use index to distinguish identical numbers in pool
+    solvedEquations: number[][]; // List of indices of cells in solved equations
     initializeLevel: (level: Level) => void;
     placeNumber: (row: number, col: number, value: number) => void;
     moveNumber: (fromR: number, fromC: number, toR: number, toC: number, value: number) => void;
@@ -33,6 +34,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     history: [],
     selectedCell: null,
     selectedNumberIndex: null,
+    solvedEquations: [],
 
     initializeLevel: (level) => {
         set({
@@ -44,7 +46,14 @@ export const useGameStore = create<GameState>((set, get) => ({
             history: [],
             selectedCell: null,
             selectedNumberIndex: null,
+            solvedEquations: [], // Reset solved
         });
+
+        // Initial detection (in case of pre-filled or fixed equations that are already solved?)
+        // Usually, initially not solved, but let's be safe.
+        // Actually, detectCompletedEquations needs grid.
+        // We can do it after set? Or just not do it initially.
+        // Let's postpone.
     },
 
     placeNumber: (row, col, value) => {
@@ -55,71 +64,87 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (cellIndex === -1) return;
 
         const cell = grid[cellIndex];
-        const isCorrect = validatePlacement(cell, value);
 
-        if (isCorrect) {
-            // Create new grid with updated cell
-            const newGrid = [...grid];
-            newGrid[cellIndex] = { ...cell, value: value, isCorrect: true };
+        const newPool = [...pool];
 
-            // Remove used value from pool
-            const poolIndex = pool.indexOf(value);
-            const newPool = [...pool];
-            if (poolIndex > -1) newPool.splice(poolIndex, 1);
-
-            // Check win condition
-            const won = checkWinCondition(newGrid);
-
-            set({
-                grid: newGrid,
-                pool: newPool,
-                status: won ? 'won' : 'playing',
-            });
-        } else {
-            // Wrong answer logic
-            // 1. Place it temporarily as 'wrong'
-            const newGrid = [...grid];
-            newGrid[cellIndex] = { ...cell, value: value, isWrong: true };
-
-            // 2. Remove from pool temporarily
-            const poolIndex = pool.indexOf(value);
-            const newPool = [...pool];
-            if (poolIndex > -1) newPool.splice(poolIndex, 1);
-
-            set({
-                lives: Math.max(0, lives - 1),
-                status: lives - 1 <= 0 ? 'lost' : 'playing',
-                grid: newGrid,
-                pool: newPool,
-                selectedCell: null,
-                selectedNumberIndex: null
-            });
-
-            // 3. Revert after delay (Bounce back effect)
-            setTimeout(() => {
-                const { grid: currentGrid, pool: currentPool, status: currentStatus } = get();
-
-                // If game ended, maybe don't revert or doesn't matter, but let's keep consistent
-                // Find the cell again
-                const currentCellIndex = currentGrid.findIndex((c) => c.r === row && c.c === col);
-                if (currentCellIndex === -1) return;
-
-                const currentCell = currentGrid[currentCellIndex];
-
-                // Only revert if it's currently holding the wrong value we placed
-                if (currentCell.value === value && currentCell.isWrong) {
-                    const revertedGrid = [...currentGrid];
-                    revertedGrid[currentCellIndex] = { ...cell, value: undefined, isWrong: undefined, isCorrect: undefined };
-
-                    const revertedPool = [...currentPool, value];
-
-                    set({
-                        grid: revertedGrid,
-                        pool: revertedPool
-                    });
-                }
-            }, 500);
+        // If cell already has a value, return it to the pool (Swap effect)
+        if (cell.type === 'input' && cell.value !== undefined) {
+            newPool.push(cell.value as number);
         }
+
+        // Remove the new value from pool
+        const poolIndex = newPool.indexOf(value);
+        if (poolIndex > -1) newPool.splice(poolIndex, 1);
+
+        // 1. Always place the number first (without validation status)
+        const newGrid = [...grid];
+        newGrid[cellIndex] = { ...cell, value: value, isCorrect: undefined, isWrong: undefined };
+
+        // 2. Check if this completes any equations
+        const { level } = get();
+        if (!level) return;
+
+        // Check for filled equations involving this cell
+        const filledEquationIndices = getFilledEquations(newGrid, level.boardSize.rows, level.boardSize.cols, row, col);
+
+        let newLives = lives;
+        let newStatus: GameStatus = status; // Start with current status
+        let equationsValidated = false;
+
+        if (filledEquationIndices.length > 0) {
+            equationsValidated = true;
+            filledEquationIndices.forEach((indices: number[]) => {
+                // Check if ALL input cells in this equation are correct
+                const allCorrect = indices.every((idx: number) => {
+                    const c = newGrid[idx];
+                    if (c.type === 'input') {
+                        // Check if value matches answer
+                        // Note: c.value is what we just placed or existing.
+                        return c.value === c.answer;
+                    }
+                    return true; // Fixed/Operator cells are always "correct" structure-wise
+                });
+
+                // Apply status based on all-or-nothing
+                indices.forEach((idx: number) => {
+                    const c = newGrid[idx];
+                    if (c.type === 'input' && c.value !== undefined) {
+                        if (allCorrect) {
+                            newGrid[idx] = { ...c, isCorrect: true, isWrong: undefined };
+                        } else {
+                            // If equation is invalid, mark ALL inputs as wrong
+                            newGrid[idx] = { ...c, isCorrect: undefined, isWrong: true };
+                        }
+                    }
+                });
+            });
+
+            // Check if ANY cell in the filled equations is wrong (which means the whole equation failed)
+            const hasError = filledEquationIndices.some((indices: number[]) =>
+                indices.some((idx: number) => newGrid[idx].isWrong)
+            );
+
+            if (hasError) {
+                newLives = Math.max(0, lives - 1);
+                newStatus = newLives <= 0 ? 'lost' : 'playing';
+            }
+        }
+
+        const won = checkWinCondition(newGrid);
+        const solvedEquations = detectCompletedEquations(newGrid, level.boardSize.rows, level.boardSize.cols);
+
+        set({
+            grid: newGrid,
+            pool: newPool,
+            lives: newLives,
+            status: newStatus === 'playing' && won ? 'won' : newStatus,
+            solvedEquations,
+            selectedCell: null, // Clear selection after placement
+            selectedNumberIndex: null
+        });
+
+        // Bounce back effect REMOVED as per user request (Step 349).
+        // Wrong answers stay in the grid with isWrong=true status.
     },
 
     removeNumber: (row, col) => {
@@ -134,7 +159,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (cell.type === 'input' && cell.value !== undefined) {
             const newGrid = [...grid];
             const value = cell.value as number;
-            newGrid[cellIndex] = { ...cell, value: undefined, isCorrect: undefined };
+            newGrid[cellIndex] = { ...cell, value: undefined, isCorrect: undefined, isWrong: undefined };
 
             set({
                 grid: newGrid,
@@ -181,53 +206,33 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (targetIndex === -1) return;
         const targetCell = grid[targetIndex];
 
-        // Validate placement
-        const isCorrect = validatePlacement(targetCell, value);
+        // For move, we just place it. Validation happens in placeNumber?
+        // No, placeNumber logic is complex (lifecycle).
+        // Reuse placeNumber logic? 
+        // We need to clear source first, THEN place in target.
+        // But placeNumber might fail/penalize.
+        // Let's manually do it to ensure cleanliness.
 
-        if (isCorrect) {
-            const newGrid = [...grid];
-
-            // Clear source
-            const sourceIndex = newGrid.findIndex((c) => c.r === fromR && c.c === fromC);
-            if (sourceIndex > -1) {
-                newGrid[sourceIndex] = { ...newGrid[sourceIndex], value: undefined, isCorrect: undefined };
-            }
-
-            // Set target
-            newGrid[targetIndex] = { ...targetCell, value: value, isCorrect: true };
-
-            const won = checkWinCondition(newGrid);
-
-            set({
-                grid: newGrid,
-                status: won ? 'won' : 'playing',
-                selectedCell: null,
-                selectedNumberIndex: null
-            });
-        } else {
-            // Moving to wrong spot: return to pool? or just stay?
-            // Requirement: "Wrong -> return to pool".
-            // If we move from A to B and B is wrong, A is cleared? 
-            // Logic: If I drag from A to B, and B is wrong, the number should return to POOL, and A should be cleared.
-
-            const { lives, pool } = get();
-            // Clear source (it flies away)
-            const newGrid = [...grid];
-            const sourceIndex = newGrid.findIndex((c) => c.r === fromR && c.c === fromC);
-            if (sourceIndex > -1) {
-                newGrid[sourceIndex] = { ...newGrid[sourceIndex], value: undefined, isCorrect: undefined };
-            }
-
-            // Add back to pool
-            const newPool = [...pool, value];
-
-            set({
-                grid: newGrid,
-                pool: newPool,
-                lives: Math.max(0, lives - 1),
-                status: lives - 1 <= 0 ? 'lost' : 'playing'
-            });
+        // 1. Clear source
+        const newGrid = [...grid];
+        const sourceIndex = newGrid.findIndex((c) => c.r === fromR && c.c === fromC);
+        if (sourceIndex > -1) {
+            newGrid[sourceIndex] = { ...newGrid[sourceIndex], value: undefined, isCorrect: undefined, isWrong: undefined };
         }
+
+        set({ grid: newGrid }); // temporary update to clear source? 
+        // Actually, we can just call removeNumber then placeNumber?
+        // removeNumber puts it back in pool. placeNumber takes from pool.
+        // That works! And handles all validation logic reuse.
+
+        // EXCEPT: removeNumber puts it at the END of pool?
+        // And placeNumber takes it from pool.
+        // If we have multiple same numbers, it might take a different one? 
+        // Value determines identity in pool (number[]).
+        // So it's fine.
+
+        get().removeNumber(fromR, fromC);
+        get().placeNumber(toR, toC, value);
     },
 
     restartLevel: () => {
@@ -238,22 +243,45 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     selectCell: (r, c) => {
-        const { status, selectedNumberIndex, pool, placeNumber } = get();
+        const { status, selectedNumberIndex, pool, placeNumber, selectedCell, moveNumber, grid } = get();
         if (status !== 'playing') return;
 
-        // If a number is already selected, place it here
+        // 1. If we have a number selected from pool -> Place it
         if (selectedNumberIndex !== null) {
             const value = pool[selectedNumberIndex];
             placeNumber(r, c, value);
             // placeNumber clears selection
-        } else {
-            // Otherwise select/deselect this cell
-            const { selectedCell } = get();
-            if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
-                set({ selectedCell: null }); // Toggle off
-            } else {
-                set({ selectedCell: { r, c } });
+            return;
+        }
+
+        // 2. If we have a cell selected (Source)
+        if (selectedCell) {
+            // Check if we clicked the SAME cell -> Deselect
+            if (selectedCell.r === r && selectedCell.c === c) {
+                set({ selectedCell: null });
+                return;
             }
+
+            // Check if we clicked a DIFFERENT cell (Target)
+            // If target is empty, we MOVE
+            const targetCell = grid.find(cell => cell.r === r && cell.c === c);
+            if (targetCell && targetCell.type === 'input' && targetCell.value === undefined) {
+                // Find visible value of source cell
+                const sourceCell = grid.find(cell => cell.r === selectedCell.r && cell.c === selectedCell.c);
+                if (sourceCell && sourceCell.value !== undefined) {
+                    moveNumber(selectedCell.r, selectedCell.c, r, c, sourceCell.value as number);
+                    // moveNumber (via placeNumber) clears selection
+                    return;
+                }
+            }
+
+            // If target is NOT empty, we switch selection to new cell
+            // (Unless it's fixed? User can select fixed cells? No, Cell.tsx prevents onClick for fixed/correct usually)
+            // Assuming Cell.tsx allows click.
+            set({ selectedCell: { r, c } });
+        } else {
+            // 3. No selection -> Select this cell
+            set({ selectedCell: { r, c } });
         }
     },
 

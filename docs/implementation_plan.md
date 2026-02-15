@@ -1,41 +1,34 @@
-# 구현 계획 - 실시간 수식 피드백
-
-사용자는 두 가지를 요청했습니다:
-1. 퍼즐 수식을 `숫자` `연산자` `숫자` `=` `답` 형태로 제한 (현재 레벨 데이터는 이를 준수함).
-2. 수식이 완성될 때마다 실시간으로 계산하여 피드백 제공.
+# 구현 계획 - 정교한 검증 및 상호작용 개선
 
 ## 목표
-- 수식 완성 시 시각적 피드백(초록색 깜빡임 등)을 제공하여 사용자가 성취감을 느끼게 함.
-- 올바른 수식이 완성되었을 때만 피드백을 제공.
+1. **엄격한 오답 처리**: 수식 자체가 틀리면, 그 수식에 포함된 모든 사용자 입력 숫자를 '오답'으로 처리 (부분 점수 없음).
+2. **상호작용 개선**:
+   - 오답이 표시된 숫자를 **Number Pool로 드래그하여 제거** 가능.
+   - 오답이 표시된 셀을 선택한 후 빈 셀을 선택하여 **이동** 가능 (이미 선택 기능은 구현됨, 이동 로직 확인).
 
-## 사용자 검토 필요 사항
-없음.
+## 구현 상세
 
-## 제안된 변경 사항
+### 1. 상호작용 (Interaction)
+#### [수정] [NumberPool.tsx](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/components/game/NumberPool.tsx)
+- `onDrop` 핸들러 추가: 그리드에서 숫자를 드래그하여 Pool에 놓으면 `removeNumber` 호출.
+- `onDragOver` 핸들러 추가: 드롭 허용 (`e.preventDefault()`).
 
-### [Helper] 게임 로직
-#### [수정] [gameLogic.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/lib/gameLogic.ts)
-- `detectCompletedEquations(grid: Cell[])`: 그리드 내에서 완성된(모든 칸이 채워지고 올바른) 수식들의 셀 인덱스 목록을 반환하는 함수 추가.
-  - 가로(Row) 및 세로(Col) 탐색.
-  - `Number` `Operator` `Number` `=` `Number` 패턴 인식.
-  - 해당 수식이 수학적으로 참인지 검증 (또는 단순히 모든 셀이 `isCorrect`인지 확인).
-
-### [Store] 게임 상태 관리
 #### [수정] [gameStore.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/store/gameStore.ts)
-- 상태 추가: `solvedEquations: number[][]` (완성된 수식에 포함된 셀 인덱스들의 배열 목록).
-- `placeNumber` 액션 수정:
-  - 숫자를 배치한 후 `detectCompletedEquations`를 호출.
-  - 새로운 완성 수식이 발견되면 `solvedEquations` 상태 업데이트.
-  - (옵션) 일시적인 효과를 위해 `lastSolvedEquation` 상태를 두어 애니메이션 트리거 가능.
+- `selectCell` 로직 개선:
+  - 현재 선택된 셀(A)이 있고, 새로운 빈 셀(B)을 클릭하면 -> A에서 B로 **이동** (`moveNumber`).
+  - 현재는 `NumberPool`에서 선택된 숫자가 있으면 배치, 아니면 선택 변경만 함. 이를 확장.
 
-### [Components] UI 피드백
-#### [수정] [Cell.tsx](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/components/game/Cell.tsx)
-- `solvedEquations`에 포함된 셀인지 확인.
-- 포함된 경우 특별한 스타일(예: 초록색 테두리 또는 배경 강조) 적용.
-- 막 완성된 수식에 대한 애니메이션 효과 추가.
+### 2. 검증 로직 (Validation)
+#### [수정] [gameStore.ts](file:///d:/SynologyDrive/dev_projects/arithmetic-puzzle/src/store/gameStore.ts)
+- `placeNumber` 내부 검증 로직 변경:
+  - `filledEquationIndices`로 찾은 수식 그룹에 대해:
+  - 해당 그룹의 모든 셀이 `isCorrect` (정답 일치)인지 확인.
+  - **하나라도 틀리면**, 그 그룹의 **모든 사용자 입력 셀**을 `isWrong: true`, `isCorrect: false`로 설정.
+  - (기존: 개별 셀마다 정답 여부 체크 -> 변경: 그룹 전체가 정답이어야만 `Correct`, 아니면 전원 `Wrong`).
 
-## 검증 계획
-1. 레벨 1에서 첫 번째 수식(`2 + 3 = 5`)의 빈칸을 채움.
-2. 마지막 숫자를 넣는 순간, 해당 수식을 구성하는 5개의 셀이 동시에 강조되는지 확인.
-3. 세로 수식도 동일하게 작동하는지 확인.
-4. 오답을 입력했을 때는 피드백이 발생하지 않는지 확인.
+## 검증 시나리오
+1. `2 + 3 = 1`을 만듦.
+   - 기존: `2`(정답 2)는 초록색, `1`(정답 5)은 빨간색.
+   - 변경: `2`도 빨간색, `1`도 빨간색. (수식 불일치).
+2. 빨간색으로 표시된 `2`를 드래그해서 Number Pool에 놓음 -> 사라짐.
+3. 빨간색으로 표시된 `1`을 클릭(선택) 후, 빈칸 클릭 -> 이동함.

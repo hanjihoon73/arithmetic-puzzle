@@ -11,7 +11,7 @@ interface CellProps {
 }
 
 export default function Cell({ cell, index }: CellProps) {
-    const { placeNumber, status, selectedCell, selectCell } = useGameStore();
+    const { placeNumber, status, selectedCell, selectCell, solvedEquations } = useGameStore();
 
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
@@ -77,6 +77,12 @@ export default function Cell({ cell, index }: CellProps) {
 
     const isSelected = selectedCell?.r === cell.r && selectedCell?.c === cell.c;
 
+    // Check if this cell is part of any solved equation
+    // We need to find the index of this cell in the grid?
+    // The grid is 1D array in store. The index prop passed to Cell corresponds to grid index.
+    // solvedEquations is number[][] (list of indices).
+    const isSolved = solvedEquations?.some(group => group.includes(index));
+
     const handleDragStart = (e: React.DragEvent, val: number) => {
         const data = JSON.stringify({ value: val, source: { r: cell.r, c: cell.c } });
         e.dataTransfer.setData('application/json', data);
@@ -92,10 +98,12 @@ export default function Cell({ cell, index }: CellProps) {
                 isCorrect && "bg-green-100 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-500 dark:text-green-400",
                 isWrong && "bg-red-100 border-red-500 text-red-700 dark:bg-red-900/30 dark:border-red-500 dark:text-red-400",
                 !isFilled && !isCorrect && !isWrong && "border-zinc-300 dark:border-zinc-700 border-dashed",
-                isSelected && "ring-4 ring-blue-500 border-blue-500 z-10"
+                isSelected && !isFilled && "ring-4 ring-blue-500 border-blue-500 z-10", // Target selection (Empty)
+                isSelected && isFilled && "ring-4 ring-purple-500 border-purple-500 z-10 animate-pulse", // Source selection (Movable)
+                isSolved && "ring-4 ring-green-500 border-green-500 z-10 bg-green-50 dark:bg-green-900/50 transition-all duration-500"
             )}
             onClick={() => {
-                if (!isCorrect && !isWrong) {
+                if (!isCorrect) { // Allow selecting wrong cells to fix them
                     selectCell(cell.r, cell.c);
                 }
             }}
