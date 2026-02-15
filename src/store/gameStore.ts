@@ -12,6 +12,7 @@ interface GameState {
     selectedCell: { r: number, c: number } | null;
     selectedNumberIndex: number | null; // Use index to distinguish identical numbers in pool
     solvedEquations: number[][]; // List of indices of cells in solved equations
+    devMode: boolean; // Dev mode for infinite lives
     initializeLevel: (level: Level) => void;
     placeNumber: (row: number, col: number, value: number) => void;
     moveNumber: (fromR: number, fromC: number, toR: number, toC: number, value: number) => void;
@@ -23,6 +24,7 @@ interface GameState {
     selectCell: (r: number, c: number) => void;
     selectNumber: (index: number, value: number) => void;
     clearSelection: () => void;
+    toggleDevMode: () => void;
 }
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -35,6 +37,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     selectedCell: null,
     selectedNumberIndex: null,
     solvedEquations: [],
+    devMode: false,
 
     initializeLevel: (level) => {
         set({
@@ -48,16 +51,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             selectedNumberIndex: null,
             solvedEquations: [], // Reset solved
         });
-
-        // Initial detection (in case of pre-filled or fixed equations that are already solved?)
-        // Usually, initially not solved, but let's be safe.
-        // Actually, detectCompletedEquations needs grid.
-        // We can do it after set? Or just not do it initially.
-        // Let's postpone.
     },
 
+    toggleDevMode: () => set((state) => ({ devMode: !state.devMode })),
+
     placeNumber: (row, col, value) => {
-        const { grid, lives, pool, status } = get();
+        const { grid, lives, pool, status, devMode } = get();
         if (status !== 'playing') return;
 
         const cellIndex = grid.findIndex((c) => c.r === row && c.c === col);
@@ -124,7 +123,7 @@ export const useGameStore = create<GameState>((set, get) => ({
                 indices.some((idx: number) => newGrid[idx].isWrong)
             );
 
-            if (hasError) {
+            if (hasError && !devMode) { // Only reduce lives if NOT in devMode
                 newLives = Math.max(0, lives - 1);
                 newStatus = newLives <= 0 ? 'lost' : 'playing';
             }

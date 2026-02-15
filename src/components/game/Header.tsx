@@ -1,11 +1,11 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
-import { Heart, Coins, Settings } from 'lucide-react';
+import { Heart, Coins, Settings, Bug } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Header() {
-    const { level, lives } = useGameStore();
+    const { level, lives, devMode, toggleDevMode } = useGameStore();
 
     if (!level) return null;
 
@@ -31,21 +31,43 @@ export default function Header() {
 
                     {/* Lives */}
                     <div className="flex items-center gap-1 text-red-500">
-                        {Array.from({ length: 3 }).map((_, i) => (
-                            <Heart
-                                key={i}
-                                size={20}
-                                fill={i < lives ? "currentColor" : "none"}
-                                className={cn(i >= lives && "text-zinc-300 dark:text-zinc-700")}
-                            />
-                        ))}
+                        {devMode ? (
+                            <span className="text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full">
+                                INF
+                            </span>
+                        ) : (
+                            Array.from({ length: 3 }).map((_, i) => (
+                                <Heart
+                                    key={i}
+                                    size={20}
+                                    fill={i < lives ? "currentColor" : "none"}
+                                    className={cn(i >= lives && "text-zinc-300 dark:text-zinc-700")}
+                                />
+                            ))
+                        )}
                     </div>
                 </div>
 
-                {/* Settings Button */}
-                <button className="p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
-                    <Settings size={20} />
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* Dev Mode Toggle */}
+                    <button
+                        onClick={toggleDevMode}
+                        className={cn(
+                            "p-2 rounded-full transition-colors",
+                            devMode
+                                ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+                                : "text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        )}
+                        title="Toggle Dev Mode"
+                    >
+                        <Bug size={20} />
+                    </button>
+
+                    {/* Settings Button */}
+                    <button className="p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors">
+                        <Settings size={20} />
+                    </button>
+                </div>
             </div>
         </header>
     );
